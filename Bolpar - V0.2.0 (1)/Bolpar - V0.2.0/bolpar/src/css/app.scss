@@ -1,0 +1,51 @@
+@media (max-width: 600px) {
+  body {
+    font-size: 14px;
+  }
+
+  .q-page {
+    min-width: 0 !important;
+  }
+
+  .q-btn {
+    min-height: 42px;
+  }
+
+  .q-card {
+    max-width: 100%;
+  }
+
+  .q-dialog__inner > .q-card {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+  }
+
+  .q-table {
+    font-size: 12px;
+  }
+
+  .q-table__title {
+    font-size: 17px;
+  }
+
+  .q-table th,
+  .q-table td {
+    padding: 6px 8px;
+  }
+
+  .q-field {
+    font-size: 14px;
+  }
+}
+
+body {
+  background: #f7f8fb;
+}
+
+.q-field--outlined .q-field__control {
+  border-radius: 16px;
+}
+
+.q-pagination .q-btn {
+  border-radius: 50%;
+}

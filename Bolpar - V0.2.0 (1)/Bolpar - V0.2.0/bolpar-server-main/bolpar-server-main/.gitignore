@@ -1,0 +1,20 @@
+#ignorar siempre todas las db.sqlite3
+/**/db.sqlite3*
+# ignorar todos los pycache
+/**/*.pyc
+# ignorar todo lq contiene migrations pero no el init
+/**/migrations/**/*.py
+!__init__.py
+/**/myenv/
+/**/env/
+/**/venv/
+/**/__pycache__/
+
+config.py
+init_linux.sh
+init_windows
+
+/**/static/
+/**/db.sqlite3.*
+.vscode/launch.json
+.backups/

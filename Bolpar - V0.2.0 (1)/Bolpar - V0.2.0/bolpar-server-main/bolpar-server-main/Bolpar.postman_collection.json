@@ -1,0 +1,417 @@
+{
+  "info": {
+    "_postman_id": "bfeca404-c20c-4f9b-a261-392cc7d0cd0e",
+    "name": "Bolpar",
+    "description": "## 🧠 Idea general (en una frase)\n\n> \n\n**Todo gira alrededor de la Orden de Venta (SalesOrder)**, y desde ahí se cuelgan máquinas, producción, consumo, personas y estados.\n\n \n  \n\n---\n\n## 🧩 Entidades principales (quién es quién)\n\n### 🟦 1. **SalesOrder (OT / Orden de Trabajo)**\n\nEs el **centro del modelo**.\n\nRepresenta:\n\n- una OT\n    \n- una venta\n    \n- un trabajo a producir\n    \n\n🔗 Desde acá se relaciona con todo:\n\n- ítems vendidos\n    \n- planificación\n    \n- consumo\n    \n- máquinas\n    \n\n👉 **Una OT tiene muchas cosas**, pero todo depende de ella.\n\n---\n\n### 🟨 2. **OrderedItem**\n\nSon los **productos / ítems** de la orden.\n\nRelación:\n\n- **1 SalesOrder → muchos OrderedItem**\n    \n\nEjemplo:\n\n> &lt;p &gt;OT 123  \n→ Producto A  \n→ Producto B&lt;/p&gt; \n  \n\n---\n\n### 🟩 3. **PlanningProduction**\n\nEs la **planificación** de la producción.\n\nGuarda:\n\n- línea\n    \n- fecha\n    \n- cantidad\n    \n- observaciones\n    \n\nRelación:\n\n- **1 SalesOrder → muchas planificaciones**\n    \n\n👉 Sirve para saber **qué se va a producir, cuándo y dónde**.\n\n---\n\n### 🟥 4. **ConsumptionInput**\n\nEs el **consumo real de insumos**.\n\nGuarda:\n\n- insumo\n    \n- cantidad\n    \n- unidad\n    \n- lote\n    \n- línea\n    \n\nRelación:\n\n- **1 SalesOrder → muchos consumos**\n    \n\n👉 Esto es lo que después te permite:\n\n- costos reales\n    \n- mermas\n    \n- control de stock\n    \n\n---\n\n## ⚙️ Parte de máquinas (clave para snapshot)\n\n### 🟪 5. **Machine**\n\nRepresenta una **máquina física**, pero **atada a una OT**.\n\nRelación:\n\n- **1 SalesOrder → muchas máquinas**\n    \n- Cada máquina tiene su `data_json` (estado vivo)\n    \n\n👉 `data_json` = lo que la máquina va acumulando mientras trabaja.\n\n---\n\n### 📸 6. **MachineSnapshot**\n\nEs el **histórico de una máquina**.\n\nRelación:\n\n- **1 Machine → muchos Snapshots**\n    \n\n👉 Cada snapshot es:\n\n- una foto del `data_json`\n    \n- en un momento puntual\n    \n- con usuario y notas\n    \n\n📌 Importante:\n\n- **Nunca se borra**\n    \n- **Nunca se modifica**\n    \n- Es auditoría pura\n    \n\n---\n\n### 🔄 7. **MachineStatusLog**\n\nEs el **log de estados** de la máquina.\n\nGuarda:\n\n- estado (ej: activa, parada, mantenimiento)\n    \n- fecha\n    \n- motivo\n    \n\nRelación:\n\n- **1 Machine → muchos estados**\n    \n\n👉 Además:\n\n- cada cambio **dispara un webhook a Zoho**\n    \n\n---\n\n## 👷 Personas\n\n### 🧑‍🏭 8. **Employee**\n\nEs el **funcionario** (viene de Zoho).\n\nNo depende de la OT directamente.\n\n---\n\n### 🔗 9. **MachineEmployee**\n\nEs la **tabla puente**.\n\nRelación:\n\n- **muchos empleados ↔ muchas máquinas**\n    \n- con historial (activo / inactivo)\n    \n\n👉 Permite saber:\n\n- quién estuvo en qué máquina\n    \n- en qué momento\n    \n- sin perder historial\n    \n\n---\n\n## 🗺️ Vista general (mental)\n\n```\nSalesOrder (OT)\n│\n├── OrderedItem\n├── PlanningProduction\n├── ConsumptionInput\n│\n├── Machine\n│   ├── MachineSnapshot\n│   ├── MachineStatusLog\n│   └── MachineEmployee ─── Employee\n\n ```\n\n---\n\n## 🟢 Cómo se usa en la vida real\n\n1️⃣ Se crea la **OT (SalesOrder)**  \n2️⃣ Se cargan productos y planificación  \n3️⃣ Se asignan **máquinas**  \n4️⃣ Las máquinas acumulan datos en `data_json`  \n5️⃣ Al terminar un turno / OT:\n\n- se guarda **snapshot**  \n    6️⃣ Se cargan consumos reales  \n    7️⃣ Se consulta historial, costos y rendimiento\n    \n\n---\n\n## 🧠 En corto\n\n- **SalesOrder** = el paraguas\n    \n- **Machine** = ejecuta\n    \n- **Snapshot** = memoria histórica\n    \n- **Consumption** = costo real\n    \n- **Employee** = quién hizo el trabajo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "7263724"
+  },
+  "item": [
+    {
+      "name": "Machine & StatusLog API",
+      "item": [
+        {
+          "name": "Crear Máquina con estados",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sales_order\": 6,\n  \"nombre\": \"IMP\",\n  \"numero\": 1,\n  \"data_json\": {},\n  \"status_logs\": [\n    {\n      \"estado\": \"Iniciar Producci\\u00f3n\",\n      \"fecha_hora\": \"2025-06-30T21:13:00\",\n      \"motivo\": \"\"\n    },\n    {\n      \"estado\": \"E2\",\n      \"fecha_hora\": \"2025-07-01T21:13:00\",\n      \"motivo\": \"\"\n    },\n    {\n      \"estado\": \"E3\",\n      \"fecha_hora\": \"2025-07-02T21:13:00\",\n      \"motivo\": \"\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url_dev}}/api/inventario/machines/",
+              "host": [
+                "{{base_url_dev}}"
+              ],
+              "path": [
+                "api",
+                "inventario",
+                "machines",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener todas las máquinas",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/inventario/machines/?ot=2",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "inventario",
+                "machines",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "ot",
+                  "value": "2"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener máquina con ID 1",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/inventario/machines/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "inventario",
+                "machines",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crear estado de máquina",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": 1,\n  \"estado\": \"E4\",\n  \"fecha_hora\": \"2025-07-03T21:13:00\",\n  \"motivo\": \"Falla menor\"\n}"
+            },
+            "url": {
+              "raw": "localhost:8000/machine-status-logs",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "machine-status-logs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar máquina (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"IMP Actualizada\",\n  \"numero\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url_dev}}/api/inventario/machines/1/",
+              "host": [
+                "{{base_url_dev}}"
+              ],
+              "path": [
+                "api",
+                "inventario",
+                "machines",
+                "1",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar estado ID 5",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "localhost:8000/machine-status-logs/5",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "machine-status-logs",
+                "5"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "crear ot",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"so_number\": 3001,\r\n  \"subject\": \"Orden desde Postman\",\r\n  \"ajuste\": \"12.50\",\r\n  \"ancho_util\": \"5.00\",\r\n  \"cantidad_kilogramos\": \"100.00\",\r\n  \"cantidad_metros\": \"50.00\",\r\n  \"cilindro\": \"0.00\",\r\n  \"shipping_city\": \"Asunción\",\r\n  \"billing_city\": \"Asunción\",\r\n  \"sales_commission\": \"2.00\",\r\n  \"created_by\": \"tester\",\r\n  \"shipping_code\": \"SC-3001\",\r\n  \"billing_code\": \"BC-3001\",\r\n  \"description\": \"Creada vía Postman\",\r\n  \"discount\": \"0.00\",\r\n  \"distancia_tacas\": \"10.00\",\r\n  \"shipping_street\": \"Calle 1\",\r\n  \"billing_street\": \"Calle 2\",\r\n  \"status\": \"pendiente\",\r\n  \"shipping_state\": \"Central\",\r\n  \"billing_state\": \"Central\",\r\n  \"tag\": \"Test\",\r\n  \"due_date\": \"2025-07-01\",\r\n  \"fondo_util\": \"0.00\",\r\n  \"fuerte_util\": \"0.00\",\r\n  \"tax\": \"0.00\",\r\n  \"excise_duty\": \"0.00\",\r\n  \"largo_util\": \"0.00\",\r\n  \"modified_by\": \"tester\",\r\n  \"currency\": \"PYG\",\r\n  \"customer_no\": \"CUST-3001\",\r\n  \"account_name\": \"Empresa Test\",\r\n  \"deal_name\": \"Deal Test\",\r\n  \"contact_name\": \"Contacto Test\",\r\n  \"quote_name\": \"Quote Test\",\r\n  \"purchase_order\": \"PO-3001\",\r\n  \"shipping_country\": \"Paraguay\",\r\n  \"billing_country\": \"Paraguay\",\r\n  \"pending\": \"\",\r\n  \"owner\": \"tester\",\r\n  \"exchange_rate\": \"1.0000\",\r\n  \"terms_and_conditions\": \"T&C Test\",\r\n  \"items\": [\r\n    {\r\n      \"quantity\": \"10.00\",\r\n      \"created_by\": \"tester\",\r\n      \"description\": \"Item 1\",\r\n      \"discount\": \"0.00\",\r\n      \"estado_op\": \"activo\",\r\n      \"tax\": \"0.00\",\r\n      \"product_name\": \"Producto 1\",\r\n      \"list_price\": \"100.00\"\r\n    }\r\n  ],\r\n  \"planificacion_produccion\": [\r\n    {\r\n      \"cant\": \"5.00\",\r\n      \"created_by\": \"tester\",\r\n      \"fecha\": \"2025-06-21T17:00:00Z\",\r\n      \"linea\": \"linea1\",\r\n      \"linea_new\": \"Línea A\",\r\n      \"observacion\": \"Plan 1\",\r\n      \"producto\": \"Producto 1\"\r\n    }\r\n  ],\r\n  \"consumo_insumos\": [\r\n    {\r\n      \"cantidad\": \"2.00\",\r\n      \"created_by\": \"tester\",\r\n      \"insumo\": \"Insumo 1\",\r\n      \"linea\": \"Linea A\",\r\n      \"lote\": \"L001\",\r\n      \"unidad\": \"kg\"\r\n    }\r\n  ]\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/inventario/orders/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "inventario",
+            "orders",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "get ot",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/inventario/orders/44",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "inventario",
+            "orders",
+            "44"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "update ot",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"subject\": \"Orden actualizada Postman\",\r\n  \"ajuste\": \"20.00\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/inventario/orders/{{order_id}}/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "inventario",
+            "orders",
+            "{{order_id}}",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "obtein token JWT",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"username\": \"user1\",\r\n    \"password\": \"12345\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/token/obtain/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "token",
+            "obtain",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Funcionarios asignados a máquina",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"employee_ids\": [\r\n        66\r\n    ],\r\n    \"mode\": \"replace\",\r\n    \"assigned_by\": \"lmeza\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/inventario/machines/111/set-employees/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "inventario",
+            "machines",
+            "111",
+            "set-employees",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Consumption inputs",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"replace\": true,\r\n    \"created_by\": \"lmeza\",\r\n    \"items\": [\r\n        {\r\n            \"insumo\": \"Hilo 40\",\r\n            \"cantidad\": 12.5,\r\n            \"unidad\": \"kg\",\r\n            \"linea\": \"linea1\",\r\n            \"lote\": \"L-001\"\r\n        },\r\n        {\r\n            \"insumo\": \"Tela X\",\r\n            \"cantidad\": 300,\r\n            \"unidad\": \"m\",\r\n            \"linea\": \"linea2\"\r\n        }\r\n    ]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/inventario/orders/41/consumos/real/bulk/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "inventario",
+            "orders",
+            "41",
+            "consumos",
+            "real",
+            "bulk",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "user",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"email\": \"test1@test.com\",\r\n    \"username\": \"admin1\",\r\n    \"password\": \"8n*5F$3q#C\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/user/create/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "user",
+            "create",
+            ""
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

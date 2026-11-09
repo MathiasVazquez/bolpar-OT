@@ -1,0 +1,1486 @@
+<template>
+  <LoadingBox
+    v-if="isGettingOrders || isLoadingMachines || Boolean(processStore.selectedOrder)"
+    :message="isGettingOrders ? 'Cargando órdenes de trabajo...' : 'Cargando maquinas...'"
+  />
+
+  <q-page v-else class="orders-dashboard">
+    <aside class="sidebar">
+      <div class="brand">
+        <q-icon name="hexagon" size="28px" color="white" class="q-mr-sm" />
+        <span class="brand-title">BOLPAR</span>
+      </div>
+
+      <q-list class="menu">
+        <q-item clickable :active="activeModule === 'orders'" @click="setModule('orders')">
+          <q-item-section avatar>
+            <q-icon name="list_alt" />
+          </q-item-section>
+          <q-item-section>Órdenes</q-item-section>
+        </q-item>
+
+        <q-item clickable :active="activeModule === 'employees'" @click="setModule('employees')">
+          <q-item-section avatar>
+            <q-icon name="groups" />
+          </q-item-section>
+          <q-item-section>Empleados</q-item-section>
+        </q-item>
+
+        <q-item
+          clickable
+          :active="activeModule === 'otStatus'"
+          @click="setModule('otStatus')"
+        >
+          <q-item-section avatar>
+            <q-icon name="account_tree" />
+          </q-item-section>
+
+          <q-item-section>Estados de las OT</q-item-section>
+        </q-item>
+
+        <q-item
+          clickable
+          :active="activeModule === 'completedOrders'"
+          @click="setModule('completedOrders')"
+        >
+          <q-item-section avatar>
+            <q-icon name="task_alt" />
+          </q-item-section>
+          <q-item-section>OT Completadas</q-item-section>
+        </q-item>
+
+        <q-item clickable :active="activeModule === 'history'" @click="setModule('history')">
+          <q-item-section avatar>
+            <q-icon name="history" />
+          </q-item-section>
+          <q-item-section>Historial</q-item-section>
+        </q-item>
+      </q-list>
+
+      <div class="sidebar-user">
+        <div class="sidebar-user-info">
+          <q-avatar color="primary" text-color="white">
+            {{ userStore.username?.charAt(0).toUpperCase() || 'U' }}
+          </q-avatar>
+
+          <div>
+            <div class="text-weight-bold">
+              {{ userStore.username || 'Usuario' }}
+            </div>
+
+            <div class="text-caption">
+              {{ userStore.userAuthorization || 'Sin máquina asignada' }}
+            </div>
+          </div>
+        </div>
+
+        <q-btn
+          unelevated
+          no-caps
+          dense
+          color="white"
+          text-color="primary"
+          label="Cerrar sesión"
+          class="logout-btn"
+          @click="handleLogout"
+        />
+      </div>
+    </aside>
+
+    <main class="content">
+      <section v-if="activeModule === 'orders'" class="history-panel">
+        <div class="section-title">Historial de acciones</div>
+
+        <q-list class="action-list">
+          <q-item v-for="action in lastTenActions" :key="action.id" class="action-item">
+            <q-item-section avatar>
+              <q-avatar :color="action.color" text-color="white" size="34px">
+                <q-icon :name="action.icon" />
+              </q-avatar>
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                {{ action.title }}
+              </q-item-label>
+
+              <q-item-label caption lines="2">
+                {{ action.description }}
+              </q-item-label>
+
+              <q-item-label caption class="text-grey-7">
+                {{ action.dateTime }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="lastTenActions.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                Todavía no hay acciones registradas.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+
+      <section v-if="activeModule === 'orders'" class="orders-panel">
+        <div class="top-row">
+          <div class="section-title">Listado de órdenes</div>
+
+          <q-btn-group rounded flat class="status-filter">
+            <q-btn
+              no-caps
+              label="Todos"
+              @click="setOrderFilter('all')"
+              :class="{ active: orderStatusFilter === 'all' }"
+            />
+
+            <q-btn
+              no-caps
+              label="Pendientes"
+              @click="setOrderFilter('pending')"
+              :class="{ active: orderStatusFilter === 'pending' }"
+            />
+
+            <q-btn
+              no-caps
+              label="Completados"
+              @click="setOrderFilter('finished')"
+              :class="{ active: orderStatusFilter === 'finished' }"
+            />
+          </q-btn-group>
+        </div>
+
+        <q-input
+          v-model="searchText"
+          dense
+          outlined
+          rounded
+          placeholder="Buscar"
+          class="main-search"
+        />
+
+        <q-list class="main-list">
+          <OrderListItem
+            v-for="order in filteredOrders"
+            :key="order.id"
+            :order="order"
+            :number="order.id"
+            @click="handleSelectOrder(order)"
+          />
+        </q-list>
+      </section>
+
+      <section v-if="activeModule === 'employees'" class="module-panel">
+        <div class="section-title">Empleados</div>
+
+        <q-input
+          v-model="employeeSearch"
+          dense
+          outlined
+          rounded
+          placeholder="Buscar empleados"
+          class="main-search"
+        >
+          <template #append>
+            <q-icon name="search" />
+          </template>
+        </q-input>
+
+        <q-list class="employees-list">
+          <q-item v-for="employee in filteredEmployees" :key="employee.id" class="employee-item">
+            <q-item-section avatar>
+              <q-avatar color="primary" text-color="white">
+                {{ employee.name?.charAt(0).toUpperCase() || 'E' }}
+              </q-avatar>
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                {{ employee.name }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="filteredEmployees.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                No hay empleados para mostrar.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+
+      <section
+        v-if="activeModule === 'otStatus'"
+        class="module-panel ot-status-panel"
+      >
+        <div class="ot-status-toolbar">
+          <div>
+            <div class="section-title ot-status-section-title">
+              Estados de las OT
+            </div>
+            <div class="ot-status-section-subtitle">
+              Seguimiento de órdenes y avance por máquina
+            </div>
+          </div>
+
+          <q-badge class="ot-status-total-badge">
+            {{ filteredStatusOrders.length }} OT
+          </q-badge>
+        </div>
+
+        <q-input
+          v-model="otStatusSearch"
+          dense
+          outlined
+          rounded
+          clearable
+          placeholder="Buscar por OT, producto o cliente..."
+          class="ot-status-search"
+        >
+          <template #prepend>
+            <q-icon name="search" />
+          </template>
+        </q-input>
+
+        <div
+          v-if="isGettingStatusOrders"
+          class="ot-status-empty"
+        >
+          <q-spinner color="primary" size="30px" />
+          <span>Cargando estados de las OT...</span>
+        </div>
+
+        <div
+          v-else-if="filteredStatusOrders.length === 0"
+          class="ot-status-empty"
+        >
+          <q-icon name="search_off" size="34px" />
+          <span>No hay órdenes para mostrar.</span>
+        </div>
+
+        <div
+          v-else
+          class="ot-status-list"
+        >
+          <article
+            v-for="order in filteredStatusOrders"
+            :key="order.id"
+            class="ot-status-card"
+            :class="{ 'ot-status-card--expanded': expandedOtId === order.id }"
+          >
+            <div
+              class="ot-status-header"
+              role="button"
+              tabindex="0"
+              @click="toggleOtStatus(order)"
+              @keyup.enter="toggleOtStatus(order)"
+            >
+              <div class="ot-status-main">
+                <div class="ot-status-id-row">
+                  <div class="ot-status-title">
+                    OT {{ order.id }}
+                  </div>
+
+                  <div
+                    v-if="order.so_number"
+                    class="ot-status-so-number"
+                  >
+                    {{ order.so_number }}
+                  </div>
+                </div>
+
+                <div
+                  class="ot-status-subject"
+                  :title="order.subject"
+                >
+                  {{ order.subject || 'Sin descripción' }}
+                </div>
+
+                <div class="ot-status-meta">
+                  <div
+                    v-if="order.account_name"
+                    class="ot-status-meta-item"
+                  >
+                    <q-icon name="business" size="17px" />
+                    <span>{{ order.account_name }}</span>
+                  </div>
+
+                  <div class="ot-status-meta-item">
+                    <q-icon name="precision_manufacturing" size="18px" />
+                    <span>
+                      {{ order.planificacion_produccion?.length ?? 0 }}
+                      máquinas
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ot-status-header-actions">
+                <div class="ot-status-view-label">
+                  {{ expandedOtId === order.id ? 'Ocultar' : 'Ver detalle' }}
+                </div>
+
+                <div class="ot-status-chevron">
+                  <q-icon
+                    :name="
+                      expandedOtId === order.id
+                        ? 'keyboard_arrow_up'
+                        : 'keyboard_arrow_down'
+                    "
+                    size="26px"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="expandedOtId === order.id"
+              class="ot-status-body"
+            >
+              <div
+                v-if="loadingOtStatusId === order.id"
+                class="ot-status-loading"
+              >
+                <q-spinner
+                  color="primary"
+                  size="28px"
+                />
+                <span>Cargando máquinas...</span>
+              </div>
+
+              <template v-else>
+                <div class="ot-machine-list">
+                  <div
+                    v-for="(plan, index) in order.planificacion_produccion"
+                    :key="`${order.id}-${index}-${plan.linea_new || plan.linea}`"
+                    class="ot-machine-row"
+                  >
+                    <div class="ot-machine-info">
+                      <div class="ot-machine-number">
+                        {{ index + 1 }}
+                      </div>
+
+                      <div class="ot-machine-text">
+                        <div class="ot-machine-name">
+                          {{
+                            plan.linea_new ||
+                            plan.linea ||
+                            'Máquina sin definir'
+                          }}
+                        </div>
+
+                        <div
+                          v-if="plan.producto"
+                          class="ot-machine-product"
+                        >
+                          {{ plan.producto }}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      class="ot-machine-status"
+                      :class="
+                        `ot-machine-status--${getMachineVisualStatus(
+                          order.id,
+                          plan.linea_new || plan.linea,
+                        )}`
+                      "
+                    >
+                      <span class="ot-machine-status-dot"></span>
+                      {{
+                        getMachineStatusLabel(
+                          order.id,
+                          plan.linea_new || plan.linea,
+                        )
+                      }}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-if="
+                    !order.planificacion_produccion ||
+                    order.planificacion_produccion.length === 0
+                  "
+                  class="ot-status-empty ot-status-empty--compact"
+                >
+                  <q-icon name="precision_manufacturing" size="30px" />
+                  <span>Esta OT no tiene máquinas planificadas.</span>
+                </div>
+              </template>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section v-if="activeModule === 'completedOrders'" class="module-panel">
+        <div class="top-row q-mb-md">
+          <div class="section-title">OT Completadas</div>
+
+          <q-badge color="primary" class="q-pa-sm">
+            {{ filteredCompletedOrders.length }} registros
+          </q-badge>
+        </div>
+
+        <q-input
+          v-model="completedOrderSearch"
+          dense
+          outlined
+          rounded
+          placeholder="Buscar OT completada"
+          class="main-search"
+        >
+          <template #append>
+            <q-icon name="search" />
+          </template>
+        </q-input>
+
+        <q-list class="completed-orders-list">
+          <q-item
+            v-for="order in filteredCompletedOrders"
+            :key="order.id"
+            class="completed-order-item"
+          >
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                OT {{ order.id }}
+              </q-item-label>
+
+              <q-item-label caption lines="2">
+                {{ order.subject }}
+              </q-item-label>
+
+              <q-item-label caption>
+                Máquinas: {{ order.machines_count }} / {{ order.plan_count }}
+                · Estado: {{ order.status || '-' }}
+                · Finalizado: {{ order.finished_at || '-' }}
+              </q-item-label>
+            </q-item-section>
+
+            <q-item-section side>
+              <div class="completed-order-actions">
+                <q-btn
+                  unelevated
+                  no-caps
+                  color="primary"
+                  icon="download"
+                  label="Exportar"
+                  :loading="exportingOrderId === order.id"
+                  @click.stop="handleExportCompletedOrder(order)"
+                />
+
+                <q-btn
+                  outline
+                  no-caps
+                  color="secondary"
+                  icon="inventory_2"
+                  label="Ver Stock CRM"
+                  @click.stop="handleViewStockCrm(order)"
+                />
+              </div>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="!isGettingCompletedOrders && filteredCompletedOrders.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                No hay OT completadas al 100%.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="isGettingCompletedOrders">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                Cargando OT completadas...
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+
+      <section v-if="activeModule === 'history'" class="module-panel">
+        <div class="section-title">Historial completo de acciones</div>
+
+        <q-list class="action-list">
+          <q-item v-for="action in filteredActions" :key="action.id" class="action-item">
+            <q-item-section avatar>
+              <q-avatar :color="action.color" text-color="white" size="34px">
+                <q-icon :name="action.icon" />
+              </q-avatar>
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                {{ action.title }}
+              </q-item-label>
+
+              <q-item-label caption lines="2">
+                {{ action.description }}
+              </q-item-label>
+
+              <q-item-label caption class="text-grey-7">
+                {{ action.dateTime }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="filteredActions.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                Todavía no hay acciones registradas.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+    </main>
+  </q-page>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import OrderListItem from 'src/components/orders/OrderListItem.vue';
+import LoadingBox from 'src/components/LoadingBox.vue';
+import type { Order } from 'src/queries/models/order.model';
+
+import type { MachineProcess } from 'src/queries/models/machines.model';
+import { useGetOtStatusOrders } from 'src/queries/ot-status.query';
+
+import { useGetOrders } from 'src/queries/orders.query';
+import { useGetMachinesQuery } from 'src/queries/get-ot-machines.query';
+import { useProcessStore } from 'src/stores/process.store';
+import { useUserStore } from 'src/stores/user.store';
+import { useGetEmployees } from 'src/queries/get-employees-query';
+import { getActionHistory, type ActionHistoryItem } from 'src/utils/action/history';
+import { api } from 'src/boot/axios';
+
+import {
+  downloadCompletedOrderExcel,
+  useGetCompletedOrders,
+  type CompletedOrder,
+} from 'src/queries/completed-orders.query';
+
+type OrderStatusFilter = 'all' | 'pending' | 'finished';
+type ActiveModule =
+  | 'orders'
+  | 'employees'
+  | 'otStatus'
+  | 'completedOrders'
+  | 'history';
+
+const router = useRouter();
+const userStore = useUserStore();
+const processStore = useProcessStore();
+
+const { orders, isGettingOrders } = useGetOrders();
+const { getMachines, isLoadingMachines } = useGetMachinesQuery();
+const { employees } = useGetEmployees();
+
+const {
+  statusOrders,
+  isGettingStatusOrders,
+} = useGetOtStatusOrders();
+
+const { completedOrders, isGettingCompletedOrders } = useGetCompletedOrders();
+
+const searchText = ref('');
+const employeeSearch = ref('');
+const completedOrderSearch = ref('');
+
+const otStatusSearch = ref('');
+const expandedOtId = ref<number | null>(null);
+const loadingOtStatusId = ref<number | null>(null);
+
+const machinesByOrder = ref<Record<number, MachineProcess[]>>({});
+
+const exportingOrderId = ref<number | null>(null);
+
+const orderStatusFilter = ref<OrderStatusFilter>('all');
+const activeModule = ref<ActiveModule>('orders');
+const actions = ref<ActionHistoryItem[]>(getActionHistory());
+
+const setModule = (module: ActiveModule) => {
+  activeModule.value = module;
+};
+
+const setOrderFilter = (filter: OrderStatusFilter) => {
+  orderStatusFilter.value = filter;
+};
+
+const filteredActions = computed(() => actions.value);
+
+const lastTenActions = computed(() => filteredActions.value.slice(0, 10));
+
+const filteredEmployees = computed(() => {
+  const text = employeeSearch.value.toLowerCase();
+
+  if (!text) return employees.value;
+
+  return employees.value.filter((employee) => employee.name.toLowerCase().includes(text));
+});
+
+const filteredStatusOrders = computed(() => {
+  const text = otStatusSearch.value.trim().toLowerCase();
+
+  if (!text) {
+    return statusOrders.value;
+  }
+
+  return statusOrders.value.filter((order) =>
+    [
+      order.id,
+      order.so_number,
+      order.subject,
+      order.account_name,
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(text),
+  );
+});
+
+const filteredCompletedOrders = computed(() => {
+  const text = completedOrderSearch.value.toLowerCase();
+
+  if (!text) return completedOrders.value;
+
+  return completedOrders.value.filter((order) =>
+    [order.id, order.so_number, order.subject, order.status, order.finished_at]
+      .join(' ')
+      .toLowerCase()
+      .includes(text),
+  );
+});
+
+const handleExportCompletedOrder = async (order: CompletedOrder) => {
+  try {
+    exportingOrderId.value = order.id;
+    await downloadCompletedOrderExcel(order);
+  } finally {
+    exportingOrderId.value = null;
+  }
+};
+
+const handleViewStockCrm = (order: CompletedOrder) => {
+  const baseURL = api.defaults.baseURL || '';
+
+  const url = `${baseURL}inventario/orders/${order.id}/resumen-stock-crm/`;
+
+  window.open(url, '_blank');
+};
+
+const filteredOrders = computed(() => {
+  const byStatus =
+    orderStatusFilter.value === 'all'
+      ? orders.value
+      : orders.value.filter((order) =>
+          orderStatusFilter.value === 'finished'
+            ? order.machine_flow_status === 'finished'
+            : order.machine_flow_status === 'pending',
+        );
+
+  const text = searchText.value.toLowerCase();
+
+  return text.length === 0
+    ? byStatus
+    : byStatus.filter((order) =>
+        [order.id, order.subject, order.account_name, order.due_date]
+          .join(' ')
+          .toLowerCase()
+          .includes(text),
+      );
+});
+
+onMounted(() => {
+  processStore.removeSelectedOrder();
+  actions.value = getActionHistory();
+});
+
+const handleLogout = () => {
+  processStore.removeSelectedOrder();
+  userStore.logout();
+  delete api.defaults.headers.common.Authorization;
+  void router.push('/');
+};
+
+const normalizeMachineText = (value: string | number | null | undefined) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const getMachineCode = (value?: string) => {
+  const match = normalizeMachineText(value).match(/^(\d+)/);
+  return match?.[1] ?? '';
+};
+
+const normalizeOtStatusText = (
+  value: string | number | null | undefined,
+) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const findMachineForPlan = (
+  orderId: number,
+  machineName: string,
+) => {
+  const machines = machinesByOrder.value[orderId] ?? [];
+
+  const planCode = getMachineCode(machineName);
+
+  const candidates = machines.filter((machine) => {
+    const machineCode = getMachineCode(machine.nombre);
+
+    if (planCode && machineCode) {
+      return planCode === machineCode;
+    }
+
+    return (
+      normalizeOtStatusText(machine.nombre) ===
+      normalizeOtStatusText(machineName)
+    );
+  });
+
+  /*
+   * Si por algún motivo histórico hubiera más de una máquina
+   * para la misma línea, tomamos la más nueva.
+   */
+  return [...candidates].sort(
+    (a, b) => Number(b.id) - Number(a.id),
+  )[0];
+};
+
+const getMachineLastStatus = (
+  machine?: MachineProcess,
+): string => {
+  if (!machine?.status_logs?.length) {
+    return '';
+  }
+
+  const sortedStatuses = [...machine.status_logs].sort(
+    (a, b) =>
+      new Date(b.fecha_hora).getTime() -
+      new Date(a.fecha_hora).getTime(),
+  );
+
+  return sortedStatuses[0]?.estado ?? '';
+};
+
+type OtMachineVisualStatus =
+  | 'not-started'
+  | 'in-process'
+  | 'paused'
+  | 'completed';
+
+const getMachineVisualStatus = (
+  orderId: number,
+  machineName: string,
+): OtMachineVisualStatus => {
+  const machine = findMachineForPlan(orderId, machineName);
+
+  if (!machine) {
+    return 'not-started';
+  }
+
+  const status = getMachineLastStatus(machine);
+
+  switch (status) {
+    case 'FINISHED':
+      return 'completed';
+
+    case 'PAUSED':
+      return 'paused';
+
+    case 'STARTED':
+    case 'PRODUCCION':
+      return 'in-process';
+
+    default:
+      return 'not-started';
+  }
+};
+
+const getMachineStatusLabel = (
+  orderId: number,
+  machineName: string,
+) => {
+  const status = getMachineVisualStatus(orderId, machineName);
+
+  switch (status) {
+    case 'completed':
+      return 'Completado';
+
+    case 'paused':
+      return 'En pausa';
+
+    case 'in-process':
+      return 'En proceso';
+
+    default:
+      return 'Sin iniciar';
+  }
+};
+
+const toggleOtStatus = async (order: Order) => {
+  /*
+   * Si presionamos la misma OT abierta, se cierra.
+   */
+  if (expandedOtId.value === order.id) {
+    expandedOtId.value = null;
+    return;
+  }
+
+  /*
+   * Abrir esta OT cierra automáticamente cualquier otra,
+   * porque expandedOtId sólo puede contener un ID.
+   */
+  expandedOtId.value = order.id;
+  loadingOtStatusId.value = order.id;
+
+  try {
+    const { data: machines } = await api.get<MachineProcess[]>(
+      `inventario/machines/?ot=${order.id}`,
+    );
+
+    machinesByOrder.value = {
+      ...machinesByOrder.value,
+      [order.id]: machines,
+    };
+  } catch (error) {
+    console.error(
+      `No se pudieron cargar las máquinas de la OT ${order.id}`,
+      error,
+    );
+
+    machinesByOrder.value = {
+      ...machinesByOrder.value,
+      [order.id]: [],
+    };
+  } finally {
+    loadingOtStatusId.value = null;
+  }
+};
+
+const handleSelectOrder = async (order: Order) => {
+  const machines = await getMachines(order.id);
+  const currentPlanification = order.planificacion_produccion[0];
+
+  const currentPlanCode = getMachineCode(
+    currentPlanification?.linea_new || currentPlanification?.linea,
+  );
+
+  const machineForThisModule = machines
+    .filter((machine) => getMachineCode(machine.nombre) === currentPlanCode)
+    .sort((a, b) => Number(b.id) - Number(a.id))[0];
+
+  processStore.selectOrder(order, machineForThisModule ? [machineForThisModule] : []);
+
+  void router.push(`/orders/${order.id}`);
+};
+</script>
+
+<style scoped lang="scss">
+.orders-dashboard {
+  min-height: 100vh;
+  display: flex;
+  background: #f7f8fb;
+}
+
+.sidebar {
+  width: 195px;
+  height: 100vh;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0b2857, #061b3d);
+  color: white;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30px;
+  padding: 8px;
+  color: white;
+}
+
+.brand-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu .q-item {
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+}
+
+.menu .q-item--active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.sidebar-user {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+}
+
+.sidebar-user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logout-btn {
+  width: 100%;
+  font-weight: 700;
+}
+
+.content {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 28px;
+  padding: 28px;
+}
+
+.history-panel,
+.orders-panel,
+.module-panel {
+  background: white;
+}
+
+.history-panel {
+  border-right: 1px solid #e3e6ed;
+  padding-right: 22px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.action-list,
+.main-list,
+.employees-list,
+.completed-orders-list {
+  border: 1px solid #dde2ea;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+}
+
+.action-item,
+.employee-item,
+.completed-order-item {
+  min-height: 70px;
+  border-bottom: 1px solid #dde2ea;
+}
+
+.action-item:last-child,
+.employee-item:last-child,
+.completed-order-item:last-child {
+  border-bottom: none;
+}
+
+.orders-panel {
+  background: white;
+}
+
+.module-panel {
+  grid-column: 1 / -1;
+  padding: 24px;
+  border-radius: 12px;
+}
+
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-filter {
+  border: 1px solid #dfe3ea;
+  overflow: hidden;
+}
+
+.status-filter .q-btn.active {
+  background: #0b2857;
+  color: white;
+}
+
+.main-search {
+  width: 280px;
+  margin-bottom: 18px;
+}
+
+.completed-order-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+/* =========================
+   ESTADOS DE LAS OT
+   ========================= */
+
+.ot-status-panel {
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 30px 32px;
+  border: 1px solid #e7eaf0;
+  box-shadow: 0 8px 28px rgba(14, 31, 53, 0.06);
+}
+
+.ot-status-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.ot-status-section-title {
+  margin-bottom: 4px;
+  font-size: 22px;
+  line-height: 1.25;
+  color: #172033;
+}
+
+.ot-status-section-subtitle {
+  color: #778195;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ot-status-total-badge {
+  background: #0b2857;
+  color: white;
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.1px;
+}
+
+.ot-status-search {
+  width: 100%;
+  max-width: 520px;
+  margin-bottom: 22px;
+}
+
+.ot-status-search :deep(.q-field__control) {
+  min-height: 42px;
+  background: #fff;
+}
+
+.ot-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ot-status-card {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e2e6ee;
+  border-radius: 12px;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.ot-status-card:hover {
+  border-color: #cbd4e2;
+  box-shadow: 0 7px 20px rgba(13, 40, 87, 0.08);
+  transform: translateY(-1px);
+}
+
+.ot-status-card--expanded {
+  border-color: #bac8dc;
+  box-shadow: 0 8px 24px rgba(13, 40, 87, 0.09);
+}
+
+.ot-status-header {
+  min-height: 118px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  cursor: pointer;
+  outline: none;
+}
+
+.ot-status-header:focus-visible {
+  box-shadow: inset 0 0 0 2px #0b2857;
+}
+
+.ot-status-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ot-status-id-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.ot-status-title {
+  color: #0b2857;
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.ot-status-so-number {
+  max-width: 220px;
+  padding: 3px 8px;
+  overflow: hidden;
+  color: #526074;
+  background: #f1f4f8;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ot-status-subject {
+  max-width: 800px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  color: #202a3c;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ot-status-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.ot-status-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #6d788b;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.ot-status-meta-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ot-status-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.ot-status-view-label {
+  color: #526074;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ot-status-chevron {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b2857;
+  background: #f1f5fa;
+  border-radius: 50%;
+}
+
+.ot-status-body {
+  padding: 0 20px 20px;
+  border-top: 1px solid #edf0f4;
+  background: #fbfcfe;
+}
+
+.ot-status-loading,
+.ot-status-empty {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #738095;
+  font-size: 13px;
+}
+
+.ot-status-loading {
+  min-height: 88px;
+}
+
+.ot-status-empty--compact {
+  min-height: 80px;
+}
+
+.ot-machine-list {
+  padding-top: 14px;
+}
+
+.ot-machine-row {
+  min-height: 62px;
+  padding: 10px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #e9edf2;
+}
+
+.ot-machine-row:last-child {
+  border-bottom: none;
+}
+
+.ot-machine-info {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ot-machine-number {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0b2857;
+  background: #eaf0f8;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ot-machine-text {
+  min-width: 0;
+}
+
+.ot-machine-name {
+  color: #202a3c;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.ot-machine-product {
+  margin-top: 3px;
+  overflow: hidden;
+  color: #7a8597;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ot-machine-status {
+  min-width: 104px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ot-machine-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ot-machine-status--not-started {
+  color: #6c7788;
+  background: #edf0f4;
+}
+
+.ot-machine-status--in-process {
+  color: #0b5cab;
+  background: #e7f2ff;
+}
+
+.ot-machine-status--paused {
+  color: #9b6400;
+  background: #fff3d6;
+}
+
+.ot-machine-status--completed {
+  color: #237a43;
+  background: #e7f6ed;
+}
+
+@media (max-width: 850px) {
+  .ot-status-panel {
+    padding: 20px;
+  }
+
+  .ot-status-header {
+    min-height: 106px;
+    padding: 16px;
+  }
+
+  .ot-status-view-label {
+    display: none;
+  }
+
+  .ot-status-subject {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .ot-status-toolbar {
+    align-items: center;
+  }
+
+  .ot-status-section-title {
+    font-size: 19px;
+  }
+
+  .ot-status-section-subtitle {
+    display: none;
+  }
+
+  .ot-status-search {
+    max-width: none;
+  }
+
+  .ot-status-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .ot-status-id-row {
+    flex-wrap: wrap;
+  }
+
+  .ot-status-subject {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .ot-status-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ot-machine-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .ot-machine-status {
+    margin-left: 42px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .history-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .orders-dashboard {
+    display: block;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    position: relative;
+  }
+
+  .brand,
+  .sidebar-user {
+    display: none;
+  }
+
+  .menu {
+    flex-direction: row;
+  }
+
+  .content {
+    padding: 12px;
+  }
+
+  .top-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .main-search {
+    width: 100%;
+  }
+
+  .completed-order-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>

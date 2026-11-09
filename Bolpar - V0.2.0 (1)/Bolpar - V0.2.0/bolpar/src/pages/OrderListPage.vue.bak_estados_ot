@@ -1,0 +1,693 @@
+<template>
+  <LoadingBox
+    v-if="isGettingOrders || isLoadingMachines || Boolean(processStore.selectedOrder)"
+    :message="isGettingOrders ? 'Cargando órdenes de trabajo...' : 'Cargando maquinas...'"
+  />
+
+  <q-page v-else class="orders-dashboard">
+    <aside class="sidebar">
+      <div class="brand">
+        <q-icon name="hexagon" size="28px" color="white" class="q-mr-sm" />
+        <span class="brand-title">BOLPAR</span>
+      </div>
+
+      <q-list class="menu">
+        <q-item clickable :active="activeModule === 'orders'" @click="setModule('orders')">
+          <q-item-section avatar>
+            <q-icon name="list_alt" />
+          </q-item-section>
+          <q-item-section>Órdenes</q-item-section>
+        </q-item>
+
+        <q-item clickable :active="activeModule === 'employees'" @click="setModule('employees')">
+          <q-item-section avatar>
+            <q-icon name="groups" />
+          </q-item-section>
+          <q-item-section>Empleados</q-item-section>
+        </q-item>
+
+        <q-item
+          clickable
+          :active="activeModule === 'completedOrders'"
+          @click="setModule('completedOrders')"
+        >
+          <q-item-section avatar>
+            <q-icon name="task_alt" />
+          </q-item-section>
+          <q-item-section>OT Completadas</q-item-section>
+        </q-item>
+
+        <q-item clickable :active="activeModule === 'history'" @click="setModule('history')">
+          <q-item-section avatar>
+            <q-icon name="history" />
+          </q-item-section>
+          <q-item-section>Historial</q-item-section>
+        </q-item>
+      </q-list>
+
+      <div class="sidebar-user">
+        <div class="sidebar-user-info">
+          <q-avatar color="primary" text-color="white">
+            {{ userStore.username?.charAt(0).toUpperCase() || 'U' }}
+          </q-avatar>
+
+          <div>
+            <div class="text-weight-bold">
+              {{ userStore.username || 'Usuario' }}
+            </div>
+
+            <div class="text-caption">
+              {{ userStore.userAuthorization || 'Sin máquina asignada' }}
+            </div>
+          </div>
+        </div>
+
+        <q-btn
+          unelevated
+          no-caps
+          dense
+          color="white"
+          text-color="primary"
+          label="Cerrar sesión"
+          class="logout-btn"
+          @click="handleLogout"
+        />
+      </div>
+    </aside>
+
+    <main class="content">
+      <section v-if="activeModule === 'orders'" class="history-panel">
+        <div class="section-title">Historial de acciones</div>
+
+        <q-list class="action-list">
+          <q-item v-for="action in lastTenActions" :key="action.id" class="action-item">
+            <q-item-section avatar>
+              <q-avatar :color="action.color" text-color="white" size="34px">
+                <q-icon :name="action.icon" />
+              </q-avatar>
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                {{ action.title }}
+              </q-item-label>
+
+              <q-item-label caption lines="2">
+                {{ action.description }}
+              </q-item-label>
+
+              <q-item-label caption class="text-grey-7">
+                {{ action.dateTime }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="lastTenActions.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                Todavía no hay acciones registradas.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+
+      <section v-if="activeModule === 'orders'" class="orders-panel">
+        <div class="top-row">
+          <div class="section-title">Listado de órdenes</div>
+
+          <q-btn-group rounded flat class="status-filter">
+            <q-btn
+              no-caps
+              label="Todos"
+              @click="setOrderFilter('all')"
+              :class="{ active: orderStatusFilter === 'all' }"
+            />
+
+            <q-btn
+              no-caps
+              label="Pendientes"
+              @click="setOrderFilter('pending')"
+              :class="{ active: orderStatusFilter === 'pending' }"
+            />
+
+            <q-btn
+              no-caps
+              label="Completados"
+              @click="setOrderFilter('finished')"
+              :class="{ active: orderStatusFilter === 'finished' }"
+            />
+          </q-btn-group>
+        </div>
+
+        <q-input
+          v-model="searchText"
+          dense
+          outlined
+          rounded
+          placeholder="Buscar"
+          class="main-search"
+        />
+
+        <q-list class="main-list">
+          <OrderListItem
+            v-for="order in filteredOrders"
+            :key="order.id"
+            :order="order"
+            :number="order.id"
+            @click="handleSelectOrder(order)"
+          />
+        </q-list>
+      </section>
+
+      <section v-if="activeModule === 'employees'" class="module-panel">
+        <div class="section-title">Empleados</div>
+
+        <q-input
+          v-model="employeeSearch"
+          dense
+          outlined
+          rounded
+          placeholder="Buscar empleados"
+          class="main-search"
+        >
+          <template #append>
+            <q-icon name="search" />
+          </template>
+        </q-input>
+
+        <q-list class="employees-list">
+          <q-item v-for="employee in filteredEmployees" :key="employee.id" class="employee-item">
+            <q-item-section avatar>
+              <q-avatar color="primary" text-color="white">
+                {{ employee.name?.charAt(0).toUpperCase() || 'E' }}
+              </q-avatar>
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                {{ employee.name }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="filteredEmployees.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                No hay empleados para mostrar.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+
+      <section v-if="activeModule === 'completedOrders'" class="module-panel">
+        <div class="top-row q-mb-md">
+          <div class="section-title">OT Completadas</div>
+
+          <q-badge color="primary" class="q-pa-sm">
+            {{ filteredCompletedOrders.length }} registros
+          </q-badge>
+        </div>
+
+        <q-input
+          v-model="completedOrderSearch"
+          dense
+          outlined
+          rounded
+          placeholder="Buscar OT completada"
+          class="main-search"
+        >
+          <template #append>
+            <q-icon name="search" />
+          </template>
+        </q-input>
+
+        <q-list class="completed-orders-list">
+          <q-item
+            v-for="order in filteredCompletedOrders"
+            :key="order.id"
+            class="completed-order-item"
+          >
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                OT {{ order.id }}
+              </q-item-label>
+
+              <q-item-label caption lines="2">
+                {{ order.subject }}
+              </q-item-label>
+
+              <q-item-label caption>
+                Máquinas: {{ order.machines_count }} / {{ order.plan_count }}
+                · Estado: {{ order.status || '-' }}
+                · Finalizado: {{ order.finished_at || '-' }}
+              </q-item-label>
+            </q-item-section>
+
+            <q-item-section side>
+              <div class="completed-order-actions">
+                <q-btn
+                  unelevated
+                  no-caps
+                  color="primary"
+                  icon="download"
+                  label="Exportar"
+                  :loading="exportingOrderId === order.id"
+                  @click.stop="handleExportCompletedOrder(order)"
+                />
+
+                <q-btn
+                  outline
+                  no-caps
+                  color="secondary"
+                  icon="inventory_2"
+                  label="Ver Stock CRM"
+                  @click.stop="handleViewStockCrm(order)"
+                />
+              </div>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="!isGettingCompletedOrders && filteredCompletedOrders.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                No hay OT completadas al 100%.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="isGettingCompletedOrders">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                Cargando OT completadas...
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+
+      <section v-if="activeModule === 'history'" class="module-panel">
+        <div class="section-title">Historial completo de acciones</div>
+
+        <q-list class="action-list">
+          <q-item v-for="action in filteredActions" :key="action.id" class="action-item">
+            <q-item-section avatar>
+              <q-avatar :color="action.color" text-color="white" size="34px">
+                <q-icon :name="action.icon" />
+              </q-avatar>
+            </q-item-section>
+
+            <q-item-section>
+              <q-item-label class="text-weight-bold">
+                {{ action.title }}
+              </q-item-label>
+
+              <q-item-label caption lines="2">
+                {{ action.description }}
+              </q-item-label>
+
+              <q-item-label caption class="text-grey-7">
+                {{ action.dateTime }}
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item v-if="filteredActions.length === 0">
+            <q-item-section>
+              <q-item-label class="text-grey-7">
+                Todavía no hay acciones registradas.
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </section>
+    </main>
+  </q-page>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import OrderListItem from 'src/components/orders/OrderListItem.vue';
+import LoadingBox from 'src/components/LoadingBox.vue';
+import type { Order } from 'src/queries/models/order.model';
+import { useGetOrders } from 'src/queries/orders.query';
+import { useGetMachinesQuery } from 'src/queries/get-ot-machines.query';
+import { useProcessStore } from 'src/stores/process.store';
+import { useUserStore } from 'src/stores/user.store';
+import { useGetEmployees } from 'src/queries/get-employees-query';
+import { getActionHistory, type ActionHistoryItem } from 'src/utils/action/history';
+import { api } from 'src/boot/axios';
+
+import {
+  downloadCompletedOrderExcel,
+  useGetCompletedOrders,
+  type CompletedOrder,
+} from 'src/queries/completed-orders.query';
+
+type OrderStatusFilter = 'all' | 'pending' | 'finished';
+type ActiveModule = 'orders' | 'employees' | 'completedOrders' | 'history';
+
+const router = useRouter();
+const userStore = useUserStore();
+const processStore = useProcessStore();
+
+const { orders, isGettingOrders } = useGetOrders();
+const { getMachines, isLoadingMachines } = useGetMachinesQuery();
+const { employees } = useGetEmployees();
+const { completedOrders, isGettingCompletedOrders } = useGetCompletedOrders();
+
+const searchText = ref('');
+const employeeSearch = ref('');
+const completedOrderSearch = ref('');
+
+const exportingOrderId = ref<number | null>(null);
+
+const orderStatusFilter = ref<OrderStatusFilter>('all');
+const activeModule = ref<ActiveModule>('orders');
+const actions = ref<ActionHistoryItem[]>(getActionHistory());
+
+const setModule = (module: ActiveModule) => {
+  activeModule.value = module;
+};
+
+const setOrderFilter = (filter: OrderStatusFilter) => {
+  orderStatusFilter.value = filter;
+};
+
+const filteredActions = computed(() => actions.value);
+
+const lastTenActions = computed(() => filteredActions.value.slice(0, 10));
+
+const filteredEmployees = computed(() => {
+  const text = employeeSearch.value.toLowerCase();
+
+  if (!text) return employees.value;
+
+  return employees.value.filter((employee) => employee.name.toLowerCase().includes(text));
+});
+
+const filteredCompletedOrders = computed(() => {
+  const text = completedOrderSearch.value.toLowerCase();
+
+  if (!text) return completedOrders.value;
+
+  return completedOrders.value.filter((order) =>
+    [order.id, order.so_number, order.subject, order.status, order.finished_at]
+      .join(' ')
+      .toLowerCase()
+      .includes(text),
+  );
+});
+
+const handleExportCompletedOrder = async (order: CompletedOrder) => {
+  try {
+    exportingOrderId.value = order.id;
+    await downloadCompletedOrderExcel(order);
+  } finally {
+    exportingOrderId.value = null;
+  }
+};
+
+const handleViewStockCrm = (order: CompletedOrder) => {
+  const baseURL = api.defaults.baseURL || '';
+
+  const url = `${baseURL}inventario/orders/${order.id}/resumen-stock-crm/`;
+
+  window.open(url, '_blank');
+};
+
+const filteredOrders = computed(() => {
+  const byStatus =
+    orderStatusFilter.value === 'all'
+      ? orders.value
+      : orders.value.filter((order) =>
+          orderStatusFilter.value === 'finished'
+            ? order.machine_flow_status === 'finished'
+            : order.machine_flow_status === 'pending',
+        );
+
+  const text = searchText.value.toLowerCase();
+
+  return text.length === 0
+    ? byStatus
+    : byStatus.filter((order) =>
+        [order.id, order.subject, order.account_name, order.due_date]
+          .join(' ')
+          .toLowerCase()
+          .includes(text),
+      );
+});
+
+onMounted(() => {
+  processStore.removeSelectedOrder();
+  actions.value = getActionHistory();
+});
+
+const handleLogout = () => {
+  processStore.removeSelectedOrder();
+  userStore.logout();
+  delete api.defaults.headers.common.Authorization;
+  void router.push('/');
+};
+
+const normalizeMachineText = (value: string | number | null | undefined) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const getMachineCode = (value?: string) => {
+  const match = normalizeMachineText(value).match(/^(\d+)/);
+  return match?.[1] ?? '';
+};
+
+const handleSelectOrder = async (order: Order) => {
+  const machines = await getMachines(order.id);
+  const currentPlanification = order.planificacion_produccion[0];
+
+  const currentPlanCode = getMachineCode(
+    currentPlanification?.linea_new || currentPlanification?.linea,
+  );
+
+  const machineForThisModule = machines
+    .filter((machine) => getMachineCode(machine.nombre) === currentPlanCode)
+    .sort((a, b) => Number(b.id) - Number(a.id))[0];
+
+  processStore.selectOrder(order, machineForThisModule ? [machineForThisModule] : []);
+
+  void router.push(`/orders/${order.id}`);
+};
+</script>
+
+<style scoped lang="scss">
+.orders-dashboard {
+  min-height: 100vh;
+  display: flex;
+  background: #f7f8fb;
+}
+
+.sidebar {
+  width: 195px;
+  height: 100vh;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0b2857, #061b3d);
+  color: white;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30px;
+  padding: 8px;
+  color: white;
+}
+
+.brand-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu .q-item {
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+}
+
+.menu .q-item--active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.sidebar-user {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+}
+
+.sidebar-user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logout-btn {
+  width: 100%;
+  font-weight: 700;
+}
+
+.content {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 28px;
+  padding: 28px;
+}
+
+.history-panel,
+.orders-panel,
+.module-panel {
+  background: white;
+}
+
+.history-panel {
+  border-right: 1px solid #e3e6ed;
+  padding-right: 22px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.action-list,
+.main-list,
+.employees-list,
+.completed-orders-list {
+  border: 1px solid #dde2ea;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+}
+
+.action-item,
+.employee-item,
+.completed-order-item {
+  min-height: 70px;
+  border-bottom: 1px solid #dde2ea;
+}
+
+.action-item:last-child,
+.employee-item:last-child,
+.completed-order-item:last-child {
+  border-bottom: none;
+}
+
+.orders-panel {
+  background: white;
+}
+
+.module-panel {
+  grid-column: 1 / -1;
+  padding: 24px;
+  border-radius: 12px;
+}
+
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-filter {
+  border: 1px solid #dfe3ea;
+  overflow: hidden;
+}
+
+.status-filter .q-btn.active {
+  background: #0b2857;
+  color: white;
+}
+
+.main-search {
+  width: 280px;
+  margin-bottom: 18px;
+}
+
+.completed-order-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .history-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .orders-dashboard {
+    display: block;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    position: relative;
+  }
+
+  .brand,
+  .sidebar-user {
+    display: none;
+  }
+
+  .menu {
+    flex-direction: row;
+  }
+
+  .content {
+    padding: 12px;
+  }
+
+  .top-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .main-search {
+    width: 100%;
+  }
+
+  .completed-order-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
